@@ -1,0 +1,63 @@
+name: Build UltimateMiniPanel APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'UltimateMiniPanel_Source.zip'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Extract project ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+          unzip -o UltimateMiniPanel_Source.zip -d extracted
+          find extracted -name settings.gradle -o -name settings.gradle.kts
+
+      - name: Locate project
+        id: project
+        run: |
+          PROJECT_DIR="$(find extracted -name settings.gradle -type f -print -quit | xargs dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: settings.gradle not found in ZIP"
+            exit 1
+          fi
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Build debug APK
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Compile APK
+        run: gradle -p "${{ steps.project.outputs.dir }}" assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: UltimateMiniPanel-APK
+          path: extracted/**/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
